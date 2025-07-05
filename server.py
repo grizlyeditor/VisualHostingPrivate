@@ -2,8 +2,11 @@ from flask import Flask, request, jsonify, send_file
 import os, subprocess, threading
 
 app = Flask(__name__)
-bot_file = None
-bot_process = None
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# Track user processes
+user_data = {}  # {user_id: {"file": path, "process": subprocess}}
 
 @app.route('/')
 def home():
@@ -11,33 +14,47 @@ def home():
 
 @app.route('/upload', methods=['POST'])
 def upload():
-    global bot_file
+    user_id = request.remote_addr.replace(".", "_")  # fallback ID if Telegram ID not available
     file = request.files.get("file")
     if not file or not file.filename.endswith(".py"):
-        return jsonify({"status": "error", "message": "Invalid file"})
-    bot_file = file.filename
-    file.save(bot_file)
-    return jsonify({"status": "success"})
+        return jsonify({"status": "error", "message": "Upload a .py file only"}), 400
+
+    # Create user folder
+    user_folder = os.path.join(UPLOAD_DIR, f"user_{user_id}")
+    os.makedirs(user_folder, exist_ok=True)
+
+    filepath = os.path.join(user_folder, "bot.py")
+    file.save(filepath)
+
+    # Store in user_data
+    user_data[user_id] = {"file": filepath, "process": None}
+
+    return jsonify({"status": "success", "message": "File uploaded!"})
 
 @app.route('/start', methods=['POST'])
 def start():
-    global bot_file, bot_process
-    if not bot_file or not os.path.exists(bot_file):
-        return jsonify({"status": "error", "message": "File not uploaded"})
-    if bot_process and bot_process.poll() is None:
-        return jsonify({"status": "error", "message": "Bot already running"})
+    user_id = request.remote_addr.replace(".", "_")
+    user = user_data.get(user_id)
 
-    def run():
-        global bot_process
-        bot_process = subprocess.Popen(['python3', bot_file])
-    threading.Thread(target=run).start()
+    if not user or not os.path.exists(user["file"]):
+        return jsonify({"status": "error", "message": "No uploaded bot for this user."})
+
+    if user["process"] and user["process"].poll() is None:
+        return jsonify({"status": "error", "message": "Bot already running."})
+
+    def run_bot():
+        user["process"] = subprocess.Popen(['python3', user["file"]])
+
+    threading.Thread(target=run_bot).start()
     return jsonify({"status": "started"})
 
 @app.route('/stop', methods=['POST'])
 def stop():
-    global bot_process
-    if bot_process and bot_process.poll() is None:
-        bot_process.terminate()
+    user_id = request.remote_addr.replace(".", "_")
+    user = user_data.get(user_id)
+
+    if user and user["process"] and user["process"].poll() is None:
+        user["process"].terminate()
         return jsonify({"status": "stopped"})
     return jsonify({"status": "not_running"})
 
