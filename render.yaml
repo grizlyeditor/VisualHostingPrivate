@@ -1,7 +1,7 @@
 services:
   - type: web
-    name: python-bot-host
+    name: telegram-web-runner
     env: python
-    buildCommand: pip install -r backend/requirements.txt
+    buildCommand: pip install -r requirements.txt
     startCommand: python server.py
     autoDeploy: true
