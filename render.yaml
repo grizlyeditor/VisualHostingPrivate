@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: python-bot-host
+    env: python
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: python server.py
+    autoDeploy: true
