@@ -3,212 +3,185 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multi-User Bot Hosting</title>
+    <title>Bot Hosting Platform</title>
     <style>
         :root {
-            --bg: #0d1117;
-            --surface: #161b22;
-            --text: #c9d1d9;
-            --primary: #58a6ff;
-            --success: #238636;
-            --border: #30363d;
+            --bg: #f5f5f5;
+            --surface: #ffffff;
+            --text: #333333;
+            --primary: #4285f4;
+            --success: #34a853;
+            --border: #dddddd;
         }
         body {
             background: var(--bg);
             color: var(--text);
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            line-height: 1.5;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
             padding: 20px;
             max-width: 1000px;
             margin: 0 auto;
         }
         .container {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
+            background: var(--surface);
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 30px;
+            margin-bottom: 20px;
         }
-        .panel {
+        h1, h2 {
+            color: var(--primary);
+        }
+        .bot-option {
             background: var(--surface);
             border: 1px solid var(--border);
             border-radius: 6px;
-            padding: 20px;
-        }
-        h1 {
-            color: var(--primary);
-            margin-bottom: 20px;
-        }
-        .form-group {
+            padding: 15px;
             margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.2s;
         }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
+        .bot-option:hover {
+            border-color: var(--primary);
+            box-shadow: 0 2px 8px rgba(66, 133, 244, 0.1);
         }
-        input, textarea, select {
-            width: 100%;
-            padding: 8px 12px;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            color: var(--text);
-            font-family: 'Courier New', monospace;
+        .bot-option h3 {
+            margin-top: 0;
+            color: var(--primary);
         }
         textarea {
+            width: 100%;
             min-height: 200px;
-            resize: vertical;
+            font-family: 'Courier New', monospace;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            margin-bottom: 15px;
         }
         button {
             background: var(--success);
             color: white;
             border: none;
-            padding: 10px 16px;
-            border-radius: 6px;
+            padding: 10px 20px;
+            border-radius: 4px;
             cursor: pointer;
-            font-weight: 500;
+            font-size: 16px;
+            transition: background 0.2s;
         }
         button:hover {
-            opacity: 0.9;
+            background: #2d9249;
         }
-        #terminal {
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 6px;
+        #status {
             padding: 15px;
-            font-family: 'Courier New', monospace;
-            min-height: 100px;
-            max-height: 300px;
-            overflow-y: auto;
+            background: #f8f9fa;
+            border-radius: 4px;
+            margin-top: 20px;
+            border-left: 4px solid var(--primary);
         }
-        .terminal-line {
-            margin-bottom: 8px;
-            white-space: pre-wrap;
+        .hidden {
+            display: none;
         }
-        .user-id {
-            font-family: monospace;
-            color: var(--primary);
-            background: rgba(88, 166, 255, 0.1);
-            padding: 2px 6px;
+        .token-input {
+            margin: 15px 0;
+        }
+        .token-input label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        .token-input input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
             border-radius: 4px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="panel">
-            <h1>Multi-User Bot Hosting</h1>
-            <p>Your User ID: <span class="user-id" id="user-id"></span></p>
-        </div>
+        <h1>Bot Hosting Platform</h1>
+        <p>Your User ID: <strong id="user-id">{{ session.user_id }}</strong></p>
         
-        <div class="panel">
-            <h2>Upload Your Bot</h2>
-            <div class="form-group">
-                <label for="bot-file">Python File (bot.py)</label>
-                <input type="file" id="bot-file" accept=".py">
-            </div>
-            <button id="upload-btn">Upload File</button>
-        </div>
+        <div id="status">Ready to start your bot...</div>
         
-        <div class="panel">
-            <h2>Or Paste Code Directly</h2>
-            <div class="form-group">
-                <label for="bot-token">Telegram Bot Token</label>
-                <input type="text" id="bot-token" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11">
-            </div>
-            <div class="form-group">
-                <label for="bot-code">Python Code</label>
-                <textarea id="bot-code" spellcheck="false">import telebot
-
-bot = telebot.TeleBot("YOUR_TOKEN_HERE")
-
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    bot.reply_to(message, "Hello from your personal bot!")
-
-# Add your handlers here</textarea>
-            </div>
-            <button id="run-btn">Start Bot</button>
-        </div>
+        <h2>Pre-built Bots</h2>
         
-        <div class="panel">
-            <h2>Output</h2>
-            <div id="terminal">
-                <div class="terminal-line">Ready to host your bot...</div>
-            </div>
+        {% for bot_name, bot_data in bots.items() %}
+        <div class="bot-option" onclick="selectPrebuildBot('{{ bot_name }}')">
+            <h3>{{ bot_name|title }} Bot</h3>
+            <p>{{ bot_data.description }}</p>
+            <button class="start-bot" data-bot-type="{{ bot_name }}">Start {{ bot_name|title }} Bot</button>
         </div>
+        {% endfor %}
+        
+        <h2>Custom Bot</h2>
+        <textarea id="custom-code" placeholder="Paste your Python bot code here..."></textarea>
+        <div class="token-input">
+            <label for="custom-token">Telegram Bot Token (required for custom bots):</label>
+            <input type="text" id="custom-token" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11">
+        </div>
+        <button id="start-custom-bot">Start Custom Bot</button>
     </div>
 
     <script>
-        // Display user ID
-        document.getElementById('user-id').textContent = sessionStorage.getItem('user_id') || 'generating...';
-        
-        // Generate user ID if not exists
+        // Set user ID
+        document.getElementById('user-id').textContent = sessionStorage.getItem('user_id') || '{{ session.user_id }}';
         if (!sessionStorage.getItem('user_id')) {
-            fetch('/')
-                .then(() => {
-                    fetch('/get-user-id')
-                        .then(res => res.json())
-                        .then(data => {
-                            sessionStorage.setItem('user_id', data.user_id);
-                            document.getElementById('user-id').textContent = data.user_id;
-                        });
-                });
+            sessionStorage.setItem('user_id', '{{ session.user_id }}');
         }
 
-        // File upload
-        document.getElementById('upload-btn').addEventListener('click', () => {
-            const fileInput = document.getElementById('bot-file');
-            const file = fileInput.files[0];
+        // Start pre-built bot
+        function selectPrebuildBot(botType) {
+            document.getElementById('status').textContent = `Starting ${botType} bot...`;
             
-            if (!file) {
-                addToTerminal('Error: No file selected');
-                return;
-            }
-            
-            const formData = new FormData();
-            formData.append('file', file);
-            
-            fetch('/upload', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    addToTerminal(`Error: ${data.error}`);
-                } else {
-                    addToTerminal(`File ${data.filename} uploaded for user ${data.user_id}`);
-                    // Load file content into editor
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        document.getElementById('bot-code').value = e.target.result;
-                    };
-                    reader.readAsText(file);
-                }
-            })
-            .catch(error => {
-                addToTerminal(`Upload failed: ${error.message}`);
-            });
-        });
-
-        // Run bot
-        document.getElementById('run-btn').addEventListener('click', () => {
-            const code = document.getElementById('bot-code').value;
-            const token = document.getElementById('bot-token').value;
-            
-            if (!token) {
-                addToTerminal('Error: Bot token is required');
-                return;
-            }
-            
-            addToTerminal('Starting your bot...');
-            
-            fetch('/run', {
+            fetch('/run-bot', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
+                    prebuild: true,
+                    bot_type: botType
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    document.getElementById('status').textContent = 'Error: ' + data.error;
+                } else {
+                    document.getElementById('status').textContent = 
+                        `${botType} bot started successfully! User ID: ${data.user_id}`;
+                }
+            })
+            .catch(error => {
+                document.getElementById('status').textContent = 'Error: ' + error.message;
+            });
+        }
+
+        // Start custom bot
+        document.getElementById('start-custom-bot').addEventListener('click', () => {
+            const code = document.getElementById('custom-code').value;
+            const token = document.getElementById('custom-token').value;
+            
+            if (!code.trim()) {
+                document.getElementById('status').textContent = 'Error: Please enter bot code';
+                return;
+            }
+            
+            if (!token.trim()) {
+                document.getElementById('status').textContent = 'Error: Token is required for custom bots';
+                return;
+            }
+            
+            document.getElementById('status').textContent = 'Starting your custom bot...';
+            
+            fetch('/run-bot', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    prebuild: false,
                     code: code,
                     token: token
                 })
@@ -216,25 +189,16 @@ def send_welcome(message):
             .then(response => response.json())
             .then(data => {
                 if (data.error) {
-                    addToTerminal(`Error: ${data.error}`);
+                    document.getElementById('status').textContent = 'Error: ' + data.error;
                 } else {
-                    addToTerminal(`Bot started successfully for user ${data.user_id}`);
-                    addToTerminal('Your bot is now running in the background');
+                    document.getElementById('status').textContent = 
+                        `Custom bot started successfully! User ID: ${data.user_id}`;
                 }
             })
             .catch(error => {
-                addToTerminal(`Error: ${error.message}`);
+                document.getElementById('status').textContent = 'Error: ' + error.message;
             });
         });
-
-        function addToTerminal(message) {
-            const terminal = document.getElementById('terminal');
-            const line = document.createElement('div');
-            line.className = 'terminal-line';
-            line.textContent = message;
-            terminal.appendChild(line);
-            terminal.scrollTop = terminal.scrollHeight;
-        }
     </script>
 </body>
-                  </html>
+</html>
