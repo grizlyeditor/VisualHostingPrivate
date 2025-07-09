@@ -1,39 +1,128 @@
-from flask import Flask, request, render_template, redirect
-import subprocess, os
+import os, json, threading, subprocess
+from flask import Flask, request
+from telegram import Bot, Update, ReplyKeyboardMarkup, KeyboardButton
+from telegram.ext import Dispatcher, CommandHandler, MessageHandler, Filters, CallbackContext
+import requests
 
+# ✅ CHANGE THESE VARIABLES ONLY:
+TOKEN = os.getenv("BOT_TOKEN", "PASTE-YOUR-TOKEN-HERE")
+WEBHOOK_BASE = os.getenv("WEBHOOK_URL", "https://your-render-url.onrender.com")
+
+# Full Webhook URL
+WEBHOOK_URL = f"{WEBHOOK_BASE}/{TOKEN}"
+
+# Folders & Bot Setup
+BASE_DIR = "users"
+os.makedirs(BASE_DIR, exist_ok=True)
+user_sessions = {}
+bot = Bot(token=TOKEN)
 app = Flask(__name__)
+dispatcher = Dispatcher(bot, None, use_context=True)
 
-LOG_PATH = "logs/bot.log"
-UPLOAD_PATH = "uploaded_bot.py"
+# ==== Handlers ====
+def start(update: Update, context: CallbackContext):
+    kb = [[KeyboardButton("VisualHosting")], [KeyboardButton("JWT Generator")]]
+    update.message.reply_text("Choose an option:", reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True))
 
-# ✅ Ensure logs folder and log file exist
-os.makedirs("logs", exist_ok=True)
-if not os.path.exists(LOG_PATH):
-    with open(LOG_PATH, "w"): pass  # create empty log file
+def handle_msg(update: Update, context: CallbackContext):
+    text = update.message.text
+    uid = str(update.effective_user.id)
+    folder = os.path.join(BASE_DIR, uid)
+    os.makedirs(folder, exist_ok=True)
 
-@app.route("/", methods=["GET", "POST"])
-def index():
-    if request.method == "POST":
-        file = request.files.get("botfile")
-        if file and file.filename.endswith(".py"):
-            file.save(UPLOAD_PATH)
-            return redirect("/")
-    with open(LOG_PATH, "r", encoding="utf-8", errors="ignore") as f:
-        log_data = f.read()
-    return render_template("index.html", log_data=log_data)
+    if text == "VisualHosting":
+        kb = [[KeyboardButton("Make"), KeyboardButton("Info")], [KeyboardButton("Back")]]
+        update.message.reply_text("Visual Hosting Options:", reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True))
 
-@app.route("/start", methods=["POST"])
-def start():
-    if os.path.exists(UPLOAD_PATH):
-        with open(LOG_PATH, "w"): pass  # clear old log
-        subprocess.Popen(
-            ["bash", "-c", "while true; do python3 uploaded_bot.py; sleep 2; done"],
-            stdout=open(LOG_PATH, "a"),
-            stderr=subprocess.STDOUT
-        )
-    return redirect("/")
+    elif text == "Make":
+        bot_file = os.path.join(folder, "bot.py")
+        if not os.path.exists(bot_file):
+            update.message.reply_text("No `bot.py` found in your folder.")
+            return
+        if uid in user_sessions:
+            update.message.reply_text("Bot already running.")
+            return
+        update.message.reply_text("Bot is starting... ✅")
 
-@app.route("/log")
-def log():
-    with open(LOG_PATH, "r", encoding="utf-8", errors="ignore") as f:
-        return f.read()
+        def run():
+            p = subprocess.Popen(["python3", bot_file], cwd=folder)
+            user_sessions[uid] = p
+            p.wait()
+            user_sessions.pop(uid, None)
+
+        threading.Thread(target=run).start()
+
+    elif text == "Info":
+        files = os.listdir(folder)
+        status = "🟢 ON" if uid in user_sessions else "🔴 OFF"
+        file_list = "\n".join(files)
+        update.message.reply_text(f"📂 Files:\n{file_list}\n\nStatus: {status}")
+
+    elif text == "Back":
+        start(update, context)
+
+    elif text == "JWT Generator":
+        update.message.reply_text("Please send `.json` file with UID & Password list.")
+
+def handle_file(update: Update, context: CallbackContext):
+    file = update.message.document
+    uid = str(update.effective_user.id)
+    folder = os.path.join(BASE_DIR, uid)
+    os.makedirs(folder, exist_ok=True)
+
+    file_path = os.path.join(folder, file.file_name)
+    file.get_file().download(custom_path=file_path)
+    update.message.reply_text(f"File `{file.file_name}` saved!")
+
+    if file.file_name.endswith(".json"):
+        with open(file_path, "r") as f:
+            try:
+                creds = json.load(f)
+            except:
+                update.message.reply_text("❌ Invalid JSON.")
+                return
+
+        update.message.reply_text("Processing UIDs...\n")
+
+        results = []
+        for i, entry in enumerate(creds, start=1):
+            uid_ = entry.get("uid")
+            pwd = entry.get("password")
+            if not uid_ or not pwd:
+                results.append(f"{i}. Skipped (invalid entry)")
+                continue
+
+            url = f"https://jw-ttoken.vercel.app/token?uid={uid_}&password={pwd}"
+            try:
+                r = requests.get(url)
+                token = r.text.strip()
+                results.append(f"{i}. ✅ Token: `{token}`")
+            except:
+                results.append(f"{i}. ❌ Error")
+
+        result_txt = "\n".join(results)
+        update.message.reply_text(f"✅ Done:\n{result_txt}")
+
+# Register handlers
+dispatcher.add_handler(CommandHandler("start", start))
+dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_msg))
+dispatcher.add_handler(MessageHandler(Filters.document, handle_file))
+
+# ==== Flask Routes ====
+@app.route('/')
+def home():
+    return "Bot is running with webhook."
+
+@app.route(f'/{TOKEN}', methods=['POST'])
+def webhook_handler():
+    update = Update.de_json(request.get_json(force=True), bot)
+    dispatcher.process_update(update)
+    return 'ok'
+
+@app.before_first_request
+def setup_webhook():
+    bot.delete_webhook()
+    bot.set_webhook(url=WEBHOOK_URL)
+
+if __name__ == '__main__':
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
