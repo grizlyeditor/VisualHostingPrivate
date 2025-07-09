@@ -1,107 +1,153 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Visual Bot Hosting</title>
-  <style>
-    body {
-      margin: 0; font-family: 'Segoe UI', sans-serif;
-      background: linear-gradient(135deg, #1a1c2c, #2f3145);
-      color: #fff; display: flex; flex-direction: column;
-      align-items: center; padding: 40px;
-    }
-    h1 { font-size: 28px; margin-bottom: 20px; }
-    .card {
-      background: rgba(255,255,255,0.05); backdrop-filter: blur(12px);
-      border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
-      padding: 24px; width: 100%; max-width: 600px;
-      box-shadow: 0 0 20px rgba(0,0,0,0.4);
-    }
-    .btn {
-      padding: 10px 20px; font-size: 16px;
-      border: none; border-radius: 6px; cursor: pointer;
-      margin: 5px; color: white;
-    }
-    .upload-btn { background: #4e9af1; }
-    .start-btn { background: #28a745; }
-    .stop-btn { background: #dc3545; }
-    .hidden { display: none; }
-    .timer { margin-top: 10px; font-size: 18px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Code Runner</title>
+    <style>
+        :root {
+            --bg: #1e1e1e;
+            --surface: #252526;
+            --text: #e0e0e0;
+            --primary: #007acc;
+            --success: #4CAF50;
+            --border: #333;
+        }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: var(--primary);
+        }
+        .editor-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .file-upload {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        .btn-upload {
+            background: var(--primary);
+            color: white;
+        }
+        .btn-run {
+            background: var(--success);
+            color: white;
+        }
+        #code-editor {
+            width: 100%;
+            height: 300px;
+            background: var(--surface);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            resize: none;
+        }
+        #terminal {
+            width: 100%;
+            height: 200px;
+            background: var(--surface);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            overflow-y: auto;
+        }
+        .terminal-line {
+            margin-bottom: 8px;
+            white-space: pre-wrap;
+        }
+    </style>
 </head>
 <body>
-  <h1>⚡ Visual Bot Hosting</h1>
-  <div class="card">
-    <input type="file" id="fileInput" accept=".py" style="color:white; background:none;"/>
-    <button class="btn upload-btn" onclick="upload()">Upload Python Bot</button>
-    <div id="actions" class="hidden">
-      <button class="btn start-btn" onclick="startBot()">▶️ Start</button>
-      <button class="btn stop-btn" onclick="stopBot()">🛑 Stop</button>
-      <div class="timer">⏱️ Running Time: <span id="timer">0</span> sec</div>
+    <div class="container">
+        <h1>Python Code Runner</h1>
+        
+        <div class="editor-container">
+            <div class="file-upload">
+                <input type="file" id="file-input" accept=".py,.txt" style="display: none;">
+                <button class="btn btn-upload" onclick="document.getElementById('file-input').click()">Upload File</button>
+                <button class="btn btn-run" id="run-btn">Run Code</button>
+            </div>
+            
+            <textarea id="code-editor" spellcheck="false"># Enter your Python code here
+print("Hello World!")</textarea>
+            
+            <div id="terminal">
+                <div class="terminal-line">Output will appear here...</div>
+            </div>
+        </div>
     </div>
-  </div>
 
-  <script>
-    let timer = 0;
-    let interval;
+    <script>
+        // File upload handler
+        document.getElementById('file-input').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('code-editor').value = e.target.result;
+                };
+                reader.readAsText(file);
+            }
+        });
 
-    async function upload() {
-      const file = document.getElementById("fileInput").files[0];
-      if (!file || !file.name.endsWith(".py")) return alert("Upload a .py file");
-
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch("/upload", {
-        method: "POST",
-        body: formData
-      });
-
-      const result = await res.json();
-      if (result.status === "success") {
-        document.getElementById("actions").classList.remove("hidden");
-        alert("✅ File uploaded! Ready to start.");
-      } else {
-        alert("❌ Upload failed.");
-      }
-    }
-
-    async function startBot() {
-      const res = await fetch("/start", { method: "POST" });
-      const result = await res.json();
-      if (result.status === "started") {
-        alert("✅ Bot started!");
-        startTimer();
-      } else {
-        alert("⚠️ Already running or error.");
-      }
-    }
-
-    async function stopBot() {
-      const res = await fetch("/stop", { method: "POST" });
-      const result = await res.json();
-      if (result.status === "stopped") {
-        alert("🛑 Bot stopped.");
-        stopTimer();
-      } else {
-        alert("⚠️ Bot not running.");
-      }
-    }
-
-    function startTimer() {
-      timer = 0;
-      document.getElementById("timer").innerText = timer;
-      interval = setInterval(() => {
-        timer++;
-        document.getElementById("timer").innerText = timer;
-      }, 1000);
-    }
-
-    function stopTimer() {
-      clearInterval(interval);
-      document.getElementById("timer").innerText = "0";
-    }
-  </script>
+        // Run code handler
+        document.getElementById('run-btn').addEventListener('click', async function() {
+            const code = document.getElementById('code-editor').value;
+            const terminal = document.getElementById('terminal');
+            
+            // Clear terminal and show loading message
+            terminal.innerHTML = '<div class="terminal-line">$ Running code...</div>';
+            
+            try {
+                const response = await fetch('/run', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ code: code })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    terminal.innerHTML += `<div class="terminal-line">${result.output}</div>`;
+                } else {
+                    terminal.innerHTML += `<div class="terminal-line" style="color:#ff6b6b">Error: ${result.output}</div>`;
+                }
+            } catch (error) {
+                terminal.innerHTML += `<div class="terminal-line" style="color:#ff6b6b">Connection error: ${error.message}</div>`;
+            }
+        });
+    </script>
 </body>
 </html>
