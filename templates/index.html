@@ -2,203 +2,42 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bot Hosting Platform</title>
+    <title>Python Bot Runner</title>
     <style>
-        :root {
-            --bg: #f5f5f5;
-            --surface: #ffffff;
-            --text: #333333;
-            --primary: #4285f4;
-            --success: #34a853;
-            --border: #dddddd;
-        }
-        body {
-            background: var(--bg);
-            color: var(--text);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            padding: 20px;
-            max-width: 1000px;
-            margin: 0 auto;
-        }
-        .container {
-            background: var(--surface);
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            padding: 30px;
-            margin-bottom: 20px;
-        }
-        h1, h2 {
-            color: var(--primary);
-        }
-        .bot-option {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 15px;
-            margin-bottom: 15px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .bot-option:hover {
-            border-color: var(--primary);
-            box-shadow: 0 2px 8px rgba(66, 133, 244, 0.1);
-        }
-        .bot-option h3 {
-            margin-top: 0;
-            color: var(--primary);
-        }
-        textarea {
-            width: 100%;
-            min-height: 200px;
-            font-family: 'Courier New', monospace;
-            padding: 10px;
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            margin-bottom: 15px;
-        }
-        button {
-            background: var(--success);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: background 0.2s;
-        }
-        button:hover {
-            background: #2d9249;
-        }
-        #status {
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 4px;
-            margin-top: 20px;
-            border-left: 4px solid var(--primary);
-        }
-        .hidden {
-            display: none;
-        }
-        .token-input {
-            margin: 15px 0;
-        }
-        .token-input label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
-        }
-        .token-input input {
-            width: 100%;
-            padding: 8px 12px;
-            border: 1px solid var(--border);
-            border-radius: 4px;
-        }
+        body { background: linear-gradient(to right, #2c003e, #6f00a8); color: white; font-family: sans-serif; padding: 20px; }
+        .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .upload-section { margin-bottom: 20px; }
+        .button { padding: 10px 20px; margin-top: 10px; background-color: #9900ff; border: none; color: white; cursor: pointer; }
+        .console-box { background-color: #1a0033; padding: 15px; white-space: pre-wrap; height: 300px; overflow-y: scroll; border-radius: 10px; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Bot Hosting Platform</h1>
-        <p>Your User ID: <strong id="user-id">{{ session.user_id }}</strong></p>
-        
-        <div id="status">Ready to start your bot...</div>
-        
-        <h2>Pre-built Bots</h2>
-        
-        {% for bot_name, bot_data in bots.items() %}
-        <div class="bot-option" onclick="selectPrebuildBot('{{ bot_name }}')">
-            <h3>{{ bot_name|title }} Bot</h3>
-            <p>{{ bot_data.description }}</p>
-            <button class="start-bot" data-bot-type="{{ bot_name }}">Start {{ bot_name|title }} Bot</button>
-        </div>
-        {% endfor %}
-        
-        <h2>Custom Bot</h2>
-        <textarea id="custom-code" placeholder="Paste your Python bot code here..."></textarea>
-        <div class="token-input">
-            <label for="custom-token">Telegram Bot Token (required for custom bots):</label>
-            <input type="text" id="custom-token" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11">
-        </div>
-        <button id="start-custom-bot">Start Custom Bot</button>
+    <div class="topbar">
+        <h2>Visual Hosting</h2>
+        <div>⋮</div>
     </div>
 
+    <div class="upload-section">
+        <form method="POST" enctype="multipart/form-data">
+            <label>Upload Python Bot File:</label><br>
+            <input type="file" name="botfile" accept=".py"><br>
+            <button class="button" type="submit">Upload</button>
+        </form>
+    </div>
+
+    <form method="POST" action="/start">
+        <button class="button" type="submit">🚀 Start Bot</button>
+    </form>
+
+    <h3>🖥️ Console Output:</h3>
+    <div class="console-box" id="console">{{ log_data }}</div>
+
     <script>
-        // Set user ID
-        document.getElementById('user-id').textContent = sessionStorage.getItem('user_id') || '{{ session.user_id }}';
-        if (!sessionStorage.getItem('user_id')) {
-            sessionStorage.setItem('user_id', '{{ session.user_id }}');
-        }
-
-        // Start pre-built bot
-        function selectPrebuildBot(botType) {
-            document.getElementById('status').textContent = `Starting ${botType} bot...`;
-            
-            fetch('/run-bot', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    prebuild: true,
-                    bot_type: botType
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    document.getElementById('status').textContent = 'Error: ' + data.error;
-                } else {
-                    document.getElementById('status').textContent = 
-                        `${botType} bot started successfully! User ID: ${data.user_id}`;
-                }
-            })
-            .catch(error => {
-                document.getElementById('status').textContent = 'Error: ' + error.message;
-            });
-        }
-
-        // Start custom bot
-        document.getElementById('start-custom-bot').addEventListener('click', () => {
-            const code = document.getElementById('custom-code').value;
-            const token = document.getElementById('custom-token').value;
-            
-            if (!code.trim()) {
-                document.getElementById('status').textContent = 'Error: Please enter bot code';
-                return;
-            }
-            
-            if (!token.trim()) {
-                document.getElementById('status').textContent = 'Error: Token is required for custom bots';
-                return;
-            }
-            
-            document.getElementById('status').textContent = 'Starting your custom bot...';
-            
-            fetch('/run-bot', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    prebuild: false,
-                    code: code,
-                    token: token
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    document.getElementById('status').textContent = 'Error: ' + data.error;
-                } else {
-                    document.getElementById('status').textContent = 
-                        `Custom bot started successfully! User ID: ${data.user_id}`;
-                }
-            })
-            .catch(error => {
-                document.getElementById('status').textContent = 'Error: ' + error.message;
-            });
-        });
+        setInterval(() => {
+            fetch('/log')
+                .then(res => res.text())
+                .then(data => document.getElementById('console').innerText = data);
+        }, 2000);
     </script>
 </body>
 </html>
