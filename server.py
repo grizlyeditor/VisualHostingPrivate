@@ -3,7 +3,6 @@ import os
 import uuid
 import subprocess
 import threading
-import telebot
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
@@ -11,44 +10,37 @@ app.secret_key = os.urandom(24)
 
 # Configuration
 UPLOAD_FOLDER = 'user_data'
-ALLOWED_EXTENSIONS = {'py', 'txt'}
+PREBUILD_BOTS = {
+    'echo': {
+        'code': '''from telebot import TeleBot
+
+bot = TeleBot("{}")
+
+@bot.message_handler(func=lambda message: True)
+def echo_all(message):
+    bot.reply_to(message, f"You said: {message.text}")
+
+bot.infinity_polling()''',
+        'description': 'Simple bot that echoes your messages'
+    },
+    'welcome': {
+        'code': '''from telebot import TeleBot
+
+bot = TeleBot("{}")
+
+@bot.message_handler(commands=['start', 'help'])
+def send_welcome(message):
+    bot.reply_to(message, "Welcome to your custom bot!")
+
+@bot.message_handler(func=lambda message: True)
+def echo_all(message):
+    bot.reply_to(message, "I'm a simple welcome bot")
+
+bot.infinity_polling()''',
+        'description': 'Bot with welcome message'
+    }
+}
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-# Telegram Bot Manager
-class BotManager:
-    def __init__(self):
-        self.active_bots = {}
-    
-    def start_bot(self, user_id, token, code):
-        bot = telebot.TeleBot(token)
-        
-        @bot.message_handler(commands=['start'])
-        def send_welcome(message):
-            bot.reply_to(message, f"Hello! This is your personal bot (User {user_id})")
-        
-        # Save bot file
-        user_dir = os.path.join(UPLOAD_FOLDER, user_id)
-        os.makedirs(user_dir, exist_ok=True)
-        
-        bot_file = os.path.join(user_dir, 'bot.py')
-        with open(bot_file, 'w') as f:
-            f.write(code)
-        
-        # Run in background
-        def run():
-            bot.infinity_polling()
-        
-        thread = threading.Thread(target=run)
-        thread.daemon = True
-        thread.start()
-        
-        self.active_bots[user_id] = {
-            'bot': bot,
-            'thread': thread,
-            'file': bot_file
-        }
-
-bot_manager = BotManager()
 
 @app.before_request
 def assign_user_id():
@@ -57,55 +49,54 @@ def assign_user_id():
 
 @app.route('/')
 def home():
-    return render_template('index.html')
+    return render_template('index.html', bots=PREBUILD_BOTS)
 
-@app.route('/upload', methods=['POST'])
-def upload_file():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file uploaded'}), 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-    
-    if file and allowed_file(file.filename):
-        user_dir = os.path.join(UPLOAD_FOLDER, session['user_id'])
-        os.makedirs(user_dir, exist_ok=True)
-        
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(user_dir, filename)
-        file.save(filepath)
-        
-        return jsonify({
-            'message': 'File uploaded successfully',
-            'filename': filename,
-            'user_id': session['user_id']
-        })
-    
-    return jsonify({'error': 'Invalid file type'}), 400
-
-@app.route('/run', methods=['POST'])
+@app.route('/run-bot', methods=['POST'])
 def run_bot():
-    data = request.json
     user_id = session['user_id']
-    code = data.get('code', '')
-    token = data.get('token', '')
+    data = request.json
     
-    if not code or not token:
-        return jsonify({'error': 'Missing code or token'}), 400
+    # Create user directory
+    user_dir = os.path.join(UPLOAD_FOLDER, user_id)
+    os.makedirs(user_dir, exist_ok=True)
     
-    try:
-        bot_manager.start_bot(user_id, token, code)
-        return jsonify({
-            'message': 'Bot started successfully',
-            'user_id': user_id
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    # Handle pre-built bots
+    if data.get('prebuild'):
+        bot_type = data['bot_type']
+        token = data.get('token', 'YOUR_DEFAULT_TOKEN')  # Replace with a real token
+        
+        if bot_type not in PREBUILD_BOTS:
+            return jsonify({'error': 'Invalid bot type'}), 400
+        
+        bot_code = PREBUILD_BOTS[bot_type]['code'].format(token)
+        bot_file = os.path.join(user_dir, f'{bot_type}_bot.py')
+    
+    # Handle custom code
+    else:
+        bot_code = data['code']
+        token = data['token']  # Required for custom code
+        bot_file = os.path.join(user_dir, 'custom_bot.py')
+    
+    # Save bot file
+    with open(bot_file, 'w') as f:
+        f.write(bot_code)
+    
+    # Run bot in background
+    def run_bot_process():
+        try:
+            subprocess.run(['python', bot_file], check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Bot failed: {e}")
 
-def allowed_file(filename):
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    thread = threading.Thread(target=run_bot_process)
+    thread.daemon = True
+    thread.start()
+    
+    return jsonify({
+        'message': 'Bot started successfully',
+        'user_id': user_id,
+        'bot_file': os.path.basename(bot_file)
+    })
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, threaded=True)
